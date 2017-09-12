@@ -13,3 +13,4 @@ operation_text		string,
 impersonator		string,
 resource_path	string)
 partitioned by (eventdate string)
+location '/extract/impala_extract'
