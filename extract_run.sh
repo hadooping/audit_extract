@@ -1,0 +1,1 @@
+oozie job -oozie http://labssnbd1dn01.lab-bigdata.intraxa:11000/oozie -config /extract.properties -run

@@ -1,0 +1,173 @@
+<workflow-app name = "Audit Extract" xmlns = "uri:oozie:workflow:0.4">
+<credentials>
+	<credential name ="hcat" type="hcat">
+		<property>
+			<name>hcat.metastore.uri</name>
+			<value>${HCAT_METASTORE_URL}</value>
+		</property>
+		<property>
+			<name>hcat.metastore.principal</name>
+			<value>${HCAT_METASTORE_PRINCIPAL}</value>
+		</property>
+	</credential>
+	<credential name ="hiveé" type="hiveé">
+		<property>
+			<name>hive2.jdbc.url</name>
+			<value>${HIVE2_JDBC_URL}</value>
+		</property>
+		<property>
+			<name>hive2.server.principal</name>
+			<value>${HIVE2_SERVER_PRINCIPAL}</value>
+		</property>
+	</credential>
+</credentials>
+
+<start to="Calculate_Date"/>
+<action name="Calculate_Date" cred="hcat,hive2">
+	<shell xmlns=uri:oozie:shell-action:0.1">
+		<job-tracker>${jobTracker}</job-tracker>
+		<name-node>${nameNode}</name-node>
+		<configuration>
+			<property>
+				<name>mapreduce.job.queuename</name>
+				<value>root.ingest</value>
+			</property>
+		</configuration>
+		<exec>${SCRIPT_LOCATION}/calculate_date.sh</exec>
+		<file>${SCRIPT_LOCATION}/calculate_date.sh#/extract/audit_extract/scripts/calculate_date.sh</file>
+		  <capture-output/>
+	</shell>
+	<ok to="HDFS_IMPORT"/>
+	<error to="end"/>
+</action>
+
+<action name="HDFS_IMPORT" cred="hcat,hive2">
+	<sqoop xmlns=uri:oozie:sqoop-action:0.2">
+		<job-tracker>${jobTracker}</job-tracker>
+		<name-node>${nameNode}</name-node>
+		 <arg>import</arg>
+		 <arg>--connect</arg>
+		 <arg>jdbc:postgresql://${IP_DOMAIN}:${PORT}/${DB_NAME}</arg>
+         <arg>--username</arg>
+         <arg>${DB_USERNAME}</arg>
+         <arg>--password-file</arg>
+		 <arg>${DB_PASSWORD}</arg>
+		 <arg>--query</arg>
+		 <arg>select id,service_name,ip_addr,event_time,operation,src,dest,permission,allowed,impersonator,delegation_token_id from hdfs_audit_event_${wf:actionData(&quot;Calculate_Date&quot;)[&quot;DATE_SUFFIX&quot;]} WHERE $CONDITIONS</arg>
+		 <arg>--target-dir</arg>
+		 <arg>${DATA_LOCATION}/hdfs_audit_events/eventdate=${wf:actionData(&quot;Calculate_Date&quot;)[&quot;DATE_SUFFIX&quot;]}</arg>
+		 <arg>-m</arg>
+		 <arg>1</arg>
+		 <file>${SCRIPT_LOCATION}/postresql.jar</file>
+	</sqoop>
+	<ok to="HIVE_IMPORT"/>
+	<error to="end"/>
+</action>
+
+<action name="HIVE_IMPORT" cred="hcat,hive2">
+	<sqoop xmlns=uri:oozie:sqoop-action:0.2">
+		<job-tracker>${jobTracker}</job-tracker>
+		<name-node>${nameNode}</name-node>
+		 <arg>import</arg>
+		 <arg>--connect</arg>
+		 <arg>jdbc:postgresql://${IP_DOMAIN}:${PORT}/${DB_NAME}</arg>
+         <arg>--username</arg>
+         <arg>${DB_USERNAME}</arg>
+         <arg>--password-file</arg>
+		 <arg>${DB_PASSWORD}</arg>
+		 <arg>--query</arg>
+		 <arg>select id,event_time,allowed,service_name,username,ip_addr,operation,database_name,object_type,table_name,operation_text,impersonator,resource_path from hive_audit_event_${wf:actionData(&quot;Calculate_Date&quot;)[&quot;DATE_SUFFIX&quot;]} WHERE $CONDITIONS</arg>
+		 <arg>--target-dir</arg>
+		 <arg>${DATA_LOCATION}/hive_audit_events/eventdate=${wf:actionData(&quot;Calculate_Date&quot;)[&quot;DATE_SUFFIX&quot;]}</arg>
+		 <arg>--hive-drop-import-delims</arg>
+		 <arg>--null-string</arg>
+		 <arg>\\N</arg>
+		 <arg>--null-non-string</arg>
+		 <arg>\\N</arg>
+		 <arg>-m</arg>
+		 <arg>1</arg>
+		 <file>${SCRIPT_LOCATION}/postresql.jar</file>
+	</sqoop>
+	<ok to="IMPALA_IMPORT"/>
+	<error to="end"/>
+</action>
+
+<action name="IMPALA_IMPORT" cred="hcat,hive2">
+	<sqoop xmlns=uri:oozie:sqoop-action:0.2">
+		<job-tracker>${jobTracker}</job-tracker>
+		<name-node>${nameNode}</name-node>
+		 <arg>import</arg>
+		 <arg>--connect</arg>
+		 <arg>jdbc:postgresql://${IP_DOMAIN}:${PORT}/${DB_NAME}</arg>
+         <arg>--username</arg>
+         <arg>${DB_USERNAME}</arg>
+         <arg>--password-file</arg>
+		 <arg>${DB_PASSWORD}</arg>
+		 <arg>--query</arg>
+		 <arg>select id,event_time,allowed,service_name,username,ip_addr,operation,database_name,object_type,table_name,operation_text,impersonator,resource_path from impala_audit_event_${wf:actionData(&quot;Calculate_Date&quot;)[&quot;DATE_SUFFIX&quot;]} WHERE $CONDITIONS</arg>
+		 <arg>--target-dir</arg>
+		 <arg>${DATA_LOCATION}/impala_audit_events/eventdate=${wf:actionData(&quot;Calculate_Date&quot;)[&quot;DATE_SUFFIX&quot;]}</arg>
+		 <arg>--hive-drop-import-delims</arg>
+		 <arg>--null-string</arg>
+		 <arg>\\N</arg>
+		 <arg>--null-non-string</arg>
+		 <arg>\\N</arg>
+		 <arg>-m</arg>
+		 <arg>1</arg>
+		 <file>${SCRIPT_LOCATION}/postresql.jar</file>
+	</sqoop>
+	<ok to="HUE_IMPORT"/>
+	<error to="end"/>
+</action>
+
+<action name="HUE_IMPORT" cred="hcat,hive2">
+	<sqoop xmlns=uri:oozie:sqoop-action:0.2">
+		<job-tracker>${jobTracker}</job-tracker>
+		<name-node>${nameNode}</name-node>
+		 <arg>import</arg>
+		 <arg>--connect</arg>
+		 <arg>jdbc:postgresql://${IP_DOMAIN}:${PORT}/${DB_NAME}</arg>
+         <arg>--username</arg>
+         <arg>${DB_USERNAME}</arg>
+         <arg>--password-file</arg>
+		 <arg>${DB_PASSWORD}</arg>
+		 <arg>--query</arg>
+		<arg>select id,service_name,allowed,username,impersonator,ip_addr,event_time,operation_text,url from hue_audit_event_${wf:actionData(&quot;Calculate_Date&quot;)[&quot;DATE_SUFFIX&quot;]} WHERE $CONDITIONS</arg>
+		 <arg>--target-dir</arg>
+		 <arg>${DATA_LOCATION}/hue_audit_events/eventdate=${wf:actionData(&quot;Calculate_Date&quot;)[&quot;DATE_SUFFIX&quot;]}</arg>
+		 <arg>-m</arg>
+		 <arg>1</arg>
+		 <file>${SCRIPT_LOCATION}/postresql.jar</file>
+	</sqoop>
+	<ok to="MSCK_REPAIR"/>
+	<error to="end"/>
+</action>
+
+<action name="MSCK_REPAIR" cred="hcat,hive2">
+	<hive2 xmlns=uri:oozie:hive2-action:0.2">
+		<job-tracker>${jobTracker}</job-tracker>
+		<name-node>${nameNode}</name-node>
+		<jdbc_url>${HIVE2_JDBC_URL}</jdbc_url>
+		<script>${SCRIPT_LOCATION}/msck_repair_table.hql</script>
+		<param>TARGET_DB_NAME=${TARGET_DB_NAME}</param>
+		<param>HDFS_TABLE_NAME=${HDFS_TABLE_NAME}</param>
+		<param>HIVE_TABLE_NAME=${HIVE_TABLE_NAME}</param>
+		<param>IMPALA_TABLE_NAME=${IMPALA_TABLE_NAME}</param>
+		<param>HUE_TABLE_NAME=${HUE_TABLE_NAME}</param>
+		 <file>${SCRIPT_LOCATION}/hive-default.xml</file>
+	</hive2>
+	<ok to="end"/>
+	<error to="kill-email"/>
+</action>
+
+<action name="kill-email" cred="hcat,hive2">
+	<email xmlns="uri:oozie:email-action:0.1">
+		<to>${SUPPORT_EMAIL}</to>
+		<subject>Audit Extract Job has failed</subject>
+        <body>Audit Extract Job has failed</body>
+    </email>
+ <ok to="end"/>
+        <error to="end"/>
+    </action>
+<end name="end" />
+</workflow-app>
