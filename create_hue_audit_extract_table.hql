@@ -9,3 +9,4 @@ event_time		string,
 operation_text		string,
 url			string)
 partitioned by (eventdate string)
+location '/extract/hue_extract'
