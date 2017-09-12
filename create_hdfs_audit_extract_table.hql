@@ -12,3 +12,4 @@ allowed 			string,
 impersonator 		string,
 delegation_token_id string)
 partitioned by (eventdate string)
+location '/extract/hdfs_extract'
